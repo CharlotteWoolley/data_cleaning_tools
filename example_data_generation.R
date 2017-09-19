@@ -3,7 +3,7 @@
 #DESCRIPTION: This code documents how an example dataset was generated for 
 #testing a data cleaning method for dates in illness records
 #PACKAGES NEEDED:
-        library(dplyr)
+        library(tidyverse)
 
 #Set the start of time and end of time for the data period generated        
         st <- '2000/01/01'
