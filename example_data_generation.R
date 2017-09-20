@@ -3,52 +3,47 @@
 #DESCRIPTION: This code documents how an example dataset was generated for 
 #testing a data cleaning method for dates in illness records
 #PACKAGES NEEDED:
+        library(dplyr)
         library(tidyverse)
 
 #Set the start of time and end of time for the data period generated        
-        st <- '2000/01/01'
-        et <- '2010/01/01'
+        st <- as.Date('2000/01/01')
+        et <- as.Date('2010/01/01')
 
 #Make a dataframe with an ID variable for each simulated individual and a randomly 
 #generated date of birth variable for each simulated individual, that assumes all
 #individuals were born between within the start and end of time
         set.seed(777)
         dat <- tibble(ID = as.factor(1:10000), 
-                      date_of_birth = sample(seq(as.Date(st), 
-                                 as.Date(et), by="day"), 10000, replace = TRUE))
+                      date_of_birth = sample(seq(st,et, by="day"), 10000, replace = TRUE))
 
 #Function that generates random dates for when the incidents were recorded and 
 #for start, end and visit dates
 
         get_dates <- function(X, min_diff=0) {
                 #date_recorded should be after the date_of_birth but before the
-                #et. mid_diff allows a minimum difference between the date of birth 
+                #et. mid_diff allows a minimum difference between the date of birth
                 #and the recorded date, with the default set to 0
-                set.seed(778)
-                X$date_recorded <- (sample(seq(as.Date(X$date_of_birth), 
-                               as.Date(et), by="day"), 1)) + min_diff
+                X$date_recorded <- sample(seq(X$date_of_birth,et, by="day"), 1, replace = TRUE) + min_diff
                 #start_date should be after the date_of birth but before the date
                 #recorded
-                set.seed(779)
-                X$start_date <- (sample(seq(as.Date(X$date_of_birth), 
-                                               as.Date(X$date_recorded), by="day"), 1))
+                X$start_date <- (sample(seq(X$date_of_birth,X$date_recorded, by="day"), 1))
                 #end_date should be after the start_date but before the et
-                set.seed(780)
-                X$end_date <- (sample(seq(as.Date(X$start_date), 
-                                            as.Date(X$date_recorded), by="day"), 1))
+                X$end_date <- (sample(seq(X$start_date,X$date_recorded, by="day"), 1))
                 #visit date should be between the start and end dates
-                set.seed(781)
-                X$visit_date <- (sample(seq(as.Date(X$start_date), 
-                                          as.Date(X$end_date), by="day"), 1))
+                X$visit_date <- (sample(seq(X$start_date,X$end_date, by="day"), 1))
                 return(X)
         }
         
+        
 #This applies the function to each row, with a minimum difference between
 #the date of birth and date recorded set at 28 days
-
+        
+       # dat <- dat[, get_dates(), by = 1:nrow(dat)]
+        set.seed(778)
         dat <- dat %>%
                 dplyr::group_by(ID) %>%
-                dplyr::do(get_dates(., min_diff = 28)) %>%
+                dplyr::do(get_dates(.)) %>%
                 dplyr::ungroup()
         
 #randomly select data to duplicate
@@ -75,8 +70,7 @@
         sub1$SD_error_gen <- TRUE
         dat <- join(dat,sub1)
         set.seed(785)
-        dat$random_SDs <- sample(seq(as.Date(st), as.Date(et), 
-                                     by="day"), length(dat$ID), replace = TRUE)
+        dat$random_SDs <- sample(seq(st, et, by="day"), length(dat$ID), replace = TRUE)
         dat$start_date <- ifelse(dat$SD_error_gen == TRUE & !is.na(dat$SD_error_gen), 
                                   dat$random_SDs, dat$start_date)
         dat$start_date <- as.Date(dat$start_date, origin="1970-01-01")
