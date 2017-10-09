@@ -3,7 +3,6 @@
 #DESCRIPTION: This code documents how an example dataset was generated for 
 #testing a data cleaning method for dates in illness records
 #PACKAGES NEEDED:
-        library(dplyr)
         library(tidyverse)
 
 #Set the start of time and end of time for the data period generated        
@@ -57,8 +56,8 @@
         subb <- dat[sample(nrow(dat), (length(dat$ID)*s)), ]
         sub_expand1 <- sub[rep(1:nrow(sub),each=2),] 
         sub_expand2 <- subb[rep(1:nrow(subb),each=3),] 
-        dat <- join(dat,sub_expand1)
-        dat <- join(dat,sub_expand2)
+        dat <- full_join(dat,sub_expand1)
+        dat <- full_join(dat,sub_expand2)
         
 #randomly select data to add errors to
 
@@ -68,7 +67,7 @@
         set.seed(784)
         sub1 <- dat[sample(nrow(dat), (length(dat$ID)*p)), ]
         sub1$SD_error_gen <- TRUE
-        dat <- join(dat,sub1)
+        dat <- full_join(dat,sub1)
         set.seed(785)
         dat$random_SDs <- sample(seq(st, et, by="day"), length(dat$ID), replace = TRUE)
         dat$start_date <- ifelse(dat$SD_error_gen == TRUE & !is.na(dat$SD_error_gen), 
@@ -79,7 +78,7 @@
         set.seed(786)
         sub2 <- dat[sample(nrow(dat), (length(dat$ID)*p)), ]
         sub2$ED_error_gen <- TRUE
-        dat <- join(dat,sub2)
+        dat <- full_join(dat,sub2)
         set.seed(787)
         dat$random_EDs <- sample(seq(as.Date(st), as.Date(et), 
                                      by="day"), length(dat$ID), replace = TRUE)
@@ -91,7 +90,7 @@
         set.seed(788)
         sub3 <- dat[sample(nrow(dat), (length(dat$ID)*p)), ]
         sub3$VD_error_gen <- TRUE
-        dat <- join(dat,sub3)
+        dat <- full_join(dat,sub3)
         set.seed(789)
         dat$random_VDs <- sample(seq(as.Date(st), as.Date(et), 
                                      by="day"), length(dat$ID), replace = TRUE)
@@ -108,7 +107,7 @@
         set.seed(790)
         sub4 <- dat[sample(nrow(dat), (length(dat$ID)*q)), ]
         sub4$SD_NAs <- TRUE
-        dat <- join(dat,sub4)
+        dat <- full_join(dat,sub4)
         set.seed(791)
         dat$start_date <- ifelse(dat$SD_NAs == TRUE & !is.na(dat$SD_NAs), 
                                  NA, dat$start_date)
@@ -118,7 +117,7 @@
         set.seed(792)
         sub5 <- dat[sample(nrow(dat), (length(dat$ID)*q)), ]
         sub5$ED_NAs <- TRUE
-        dat <- join(dat,sub5)
+        dat <- full_join(dat,sub5)
         set.seed(793)
         dat$end_date <- ifelse(dat$ED_NAs == TRUE & !is.na(dat$ED_NAs), 
                                NA, dat$end_date)
@@ -128,7 +127,7 @@
         set.seed(794)
         sub6 <- dat[sample(nrow(dat), (length(dat$ID)*q)), ]
         sub6$VD_NAs <- TRUE
-        dat <- join(dat,sub6)
+        dat <- full_join(dat,sub6)
         set.seed(795)
         dat$visit_date <- ifelse(dat$VD_NAs == TRUE & !is.na(dat$VD_NAs),
                                  NA, dat$visit_date)
