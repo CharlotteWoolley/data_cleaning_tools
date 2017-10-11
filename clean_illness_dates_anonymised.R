@@ -5,27 +5,26 @@
 #it has been anonymised and adapted to be used on an example dataset 
 #PACKAGES NEEDED:
 
-        library(plyr)
         library(tidyverse)
         library(data.table)
         library(lubridate)
-        setwd("/Users/s1576473/Desktop/data_cleaning_tools")
 
 #PRELIMINARY DATA ORGANISATION/EXPLORATION
 
 #read in data and format 
 
         dat <- read_csv('example_dates_data.csv')
-        dat2 <- dat[,2:7] #remove the 'X1' column
+        dat2 <- dat[,2:7] #removes the 'X1' column
         dat2 <- dat2 %>%
-                mutate(row_no = 1:nrow(dat2),
-                       ID = as.factor(ID),
+                mutate(ID = as.factor(ID),
                        start_date_new = start_date,
                        end_date_new = end_date,
-                       visit_date_new = visit_date)
-
-#function that create columns to identify duplications in the ID and to
-#identify whether the entire data entry has been completely duplicated
+                       visit_date_new = visit_date) 
+        dat2 <- dat2[order(dat2$ID), ]
+        
+#function that creates columns to identify duplications in the ID and to
+#identify whether the entire data entry has been completely duplicated. It
+#Then prints how may of each type of duplications there are
         get_duplications <- function(X) {
                 X <- X %>%
                 mutate(duplications = (duplicated(ID) | duplicated(ID, fromLast = TRUE)),
@@ -34,25 +33,23 @@
                complete_duplications = (duplicated(complete_dups_ID) | 
                                                 duplicated(complete_dups_ID, 
                                                            fromLast = TRUE)))
+                print(c("Duplications", sum(X$duplications)))
+                print(c("Complete Duplications", sum(X$complete_duplications)))
                 return(X)
         }
 
         dat2 <- get_duplications(dat2)
-        sum(dat2$duplications) #2392 duplications
-        sum(dat2$complete_duplications) #808 complete duplications
 
 #seperate the subsets of duplicated and non-duplicated data so that 
 #duplicates can be cleaned first
         dups <- subset(dat2, dat2$duplications == TRUE)  #2392 duplications
         not_dups <- subset(dat2, dat2$duplications == FALSE) #9026 not duplicated
 
-
 #STEP 1 OF CLEANING – REMOVE THE COMPLETE DUPLICATIONS  
 
 #get_complete_dup_info finds the last complete duplicate in the data 
 #(i.e the most recently entered entry)
         get_complete_dup_info <- function(X){
-                X <- X[order(X$complete_dups_ID), ]
                 observation_comp <- 1:nrow(X) 
                 last_obs_num_comp <- tail(observation_comp, 1)
                 X$last_observation_comp <- last_obs_num_comp == observation_comp
@@ -67,21 +64,19 @@
 #Make a new dataset that contains only the most recent entry from complete 
 #duplicates and deletes all older complete duplicates        
         dups2 <- subset(dups, (dups$complete_duplications == FALSE) |
-                                (dups$complete_duplications == TRUE & dups$last_observation_comp == TRUE))
+                                (dups$complete_duplications == TRUE & 
+                                         dups$last_observation_comp == TRUE))
         length(dups$ID) - length(dups2$ID) #This removes 435 data entries 
 
 #recreate duplicate columns to identify changes in the duplications
         dups2 <- get_duplications(dups2)
-        sum(dups2$duplications) #1698 duplications
-        sum(dups2$complete_duplications) #0 complete duplications
-
+        
 #STEP 2 OF CLEANING – REPLACE MISSING DATA WITH DATA IN OTHER DUPLICATE ROWS 
 
 #get_complete_dup_info finds the last duplicate in the data 
 #(i.e the most recently entered entry) and also finds the number of
 #entries in each group of duplicates
         get_dup_info <- function(X){
-                X <- X[order(X$ID), ]
                 observation <- 1:nrow(X)
                 X$last_obs_num <- tail(observation, 1)
                 X$last_observation <- X$last_obs_num == observation
@@ -97,20 +92,21 @@
         n #There are a maximum of n(10) duplicates of every data entry
 
 #get_lags leads generates n (10) columns with the previous and following 
-#data entries for the start dates, end dates and visit dates
-        get_lags_leads <- function(X, n) {
-                X <- setDT(X)[, paste("SD_lag", 1:n, sep = "") 
-                              := shift(start_date_new, 1:n)][]
-                X <- setDT(X)[, paste("SD_lead", 1:n, sep = "") 
-                              := shift(start_date_new, 1:n, type = "lead")][]
-                X <- setDT(X)[, paste("ED_lag", 1:n, sep = "") 
-                              := shift(end_date_new, 1:n)][]
-                X <- setDT(X)[, paste("ED_lead", 1:n, sep = "") 
-                              := shift(end_date_new, 1:n, type = "lead")][]
-                X <- setDT(X)[, paste("VD_lag", 1:n, sep= "") 
-                              := shift(visit_date_new, 1:n)][]
-                X <- setDT(X)[, paste("VD_lead", 1:n, sep = "") 
-                              := shift(visit_date_new, 1:n, type = "lead")][]
+#data entries for the start dates, end dates and visit dates 
+
+        get_lags_leads <- function(X, n, var1 = "start_date_new", var2 = "end_date_new", 
+                                   var3 = "visit_date_new", var1_lag_name = "SD_lag",
+                                   var2_lag_name = "ED_lag", var3_lag_name = "VD_lag", 
+                                   var1_lead_name = "SD_lead", var2_lead_name = "ED_lead", 
+                                   var3_lead_name = "VD_lead") {
+                for(i in 1:n) {
+                        X[, paste(var1_lag_name, i, sep = "")] <- lag(X[[var1]], i)
+                        X[, paste(var2_lag_name, i, sep = "")] <- lag(X[[var2]], i)
+                        X[, paste(var3_lag_name, i, sep = "")] <- lag(X[[var3]], i)
+                        X[, paste(var1_lead_name, i, sep = "")] <- lead(X[[var1]], i)
+                        X[, paste(var2_lead_name, i, sep = "")] <- lead(X[[var2]], i)
+                        X[, paste(var3_lead_name, i, sep = "")] <- lead(X[[var3]], i)
+                }
                 return(X)
         }
 
@@ -120,344 +116,170 @@
                 dplyr::do(get_lags_leads(., n)) %>%
                 dplyr::ungroup()
 
-#get_missing_data makes binary columns for whether the columns contain 
-#missing data or not
-        get_missing_data <- function (X,a,b,c,y) {
-                X <- setDT(X)[, paste("start_date_miss", y, sep = "") 
-                              := is.na(X[[a]])][]
-                X <- setDT(X)[, paste("end_date_miss", y, sep = "") 
-                              := is.na(X[[b]])][]
-                X <- setDT(X)[, paste("visit_date_miss", y, sep = "") 
-                              := is.na(X[[c]])][]
-                return(X)
-        }
-        
-        dups3 <- get_missing_data(dups3, a = "start_date_new", b = "end_date_new", 
-                                  c = "visit_date_new", y = "")
- 
-#Get_lags_leads_missing_data makes binary columns for whether the 
-#lagging and leading columns contain missing data or not     
-        get_lags_leads_missing_data <- function(X, n) {
+        replace_missing_dates <- function(X, n, var1, var2, var3, print_results = TRUE) {
+                if(print_results == TRUE) {
+                        print(paste("Total number of", paste(var1, " NAs", sep =""), "before replacements"))
+                        a <- (sum(is.na(X[[var1]]))) 
+                        print(a) }
                 for(i in 1:n) {
-                        X <- get_missing_data(X, a = paste("SD_lag", i, sep=""), 
-                                              b = paste("ED_lag", i, sep=""), 
-                                              c = paste("VD_lag", i, sep=""), 
-                                              y = paste("_lag", i, sep=""))
-                        X <- get_missing_data(X, a = paste("SD_lead", i, sep=""), 
-                                              b = paste("ED_lead", i, sep=""), 
-                                              c = paste("VD_lead", i, sep=""), 
-                                              y = paste("_lead", i, sep=""))
+                        X[[var1]] <- ifelse(!is.na(X[[var1]]), X[[var1]], 
+                                            ifelse(is.na(X[[var1]]) & 
+                                                           !is.na(X[[paste(var2, i, sep="")]]), 
+                                                   X[[paste(var2, i, sep="")]],
+                                                   ifelse(is.na(X[[var1]]) & 
+                                                                  !is.na(X[[paste(var3, i, sep="")]]), 
+                                                          X[[paste(var3, i, sep="")]], X[[var1]])))
+                        #This prints out results after each iteration of 'n' so
+                        #it can be clearly visualised where the corrections are made
+                        if(print_results == TRUE) {
+                        print(paste("Total number of ", paste(var1, " NAs", sep =""), " after n = ", i, sep=""))
+                                print(sum(is.na(X[[var1]]))) 
+                        }
+                }
+                if(print_results == TRUE) {
+                        print(paste("Total number of", paste(var1, " NAs", sep =""), "replaced"))
+                        b <- (sum(is.na(X[[var1]]))) 
+                        print(a-b)
                 }
                 return(X)
         }
         
-        dups3 <- as.data.frame(get_lags_leads_missing_data(dups3, n)) 
-
-        replace_missing_data <- function(X, n) {
-                for(i in 1:n) {
-                        #replace missing data in the start dates
-                        X$start_date_new <- ifelse(X$start_date_miss == FALSE |
-                                                           is.na(X$start_date_miss), 
-                                                   X$start_date_new, 
-                                                   ifelse(X$start_date_miss == TRUE & 
-                                                                  (X[, paste("start_date_miss_lag", 
-                                                                             i, sep="")] == FALSE), 
-                                                          X[, paste("SD_lag", i, sep="")], 
-                                                          ifelse(X$start_date_miss == TRUE & 
-                                                                         (X[, paste("start_date_miss_lead", 
-                                                                                    i, sep="")] == FALSE), 
-                                                                 X[, paste("SD_lead", i, sep="")], 
-                                                                 X$start_date_new))) 
-                        #replace missing data in the end dates
-                        X$end_date_new <- ifelse(X$end_date_miss == FALSE |
-                                                         is.na(X$end_date_miss), 
-                                                 X$end_date_new, 
-                                                 ifelse(X$end_date_miss == TRUE & 
-                                                                (X[, paste("end_date_miss_lag", 
-                                                                           i, sep="")] == FALSE), 
-                                                        X[, paste("ED_lag", i, sep="")], 
-                                                        ifelse(X$end_date_miss == TRUE & 
-                                                                       (X[, paste("end_date_miss_lead", 
-                                                                                  i, sep="")] == FALSE), 
-                                                               X[, paste("ED_lead", i, sep="")], 
-                                                               X$end_date_new))) 
-                        #replace missing data in the visit dates
-                        X$visit_date_new <- ifelse(X$visit_date_miss == FALSE |
-                                                           is.na(X$visit_date_miss), 
-                                                   X$visit_date_new, 
-                                                   ifelse(X$visit_date_miss == TRUE & 
-                                                                  (X[, paste("visit_date_miss_lag", 
-                                                                             i, sep="")] == FALSE), 
-                                                          X[, paste("VD_lag", i, sep="")], 
-                                                          ifelse(X$visit_date_miss == TRUE & 
-                                                                         (X[, paste("visit_date_miss_lead", 
-                                                                                    i, sep="")] == FALSE), 
-                                                                 X[, paste("VD_lead", i, sep="")], 
-                                                                 X$visit_date_new))) 
-                        X <- get_missing_data(X, a = "start_date_new", b = "end_date_new", 
-                                              c = "visit_date_new", y = "")
-                }
-                return(X)
-        }
-        
-        dups4 <- replace_missing_data(dups3, n)
+        dups4 <- replace_missing_dates(dups3, n, "start_date_new", "SD_lag", "SD_lead", print_results = FALSE)
+        dups4 <- replace_missing_dates(dups4, n, "end_date_new", "ED_lag", "ED_lead", print_results = FALSE)
+        dups4 <- replace_missing_dates(dups4, n, "visit_date_new", "VD_lag", "VD_lead", print_results = FALSE)
         
 #Transform the date columns that have been edited back to human-readable format
         dups4$end_date_new <- as.Date(dups4$end_date_new, origin="1970-01-01")
         dups4$start_date_new <- as.Date(dups4$start_date_new, origin="1970-01-01")
         dups4$visit_date_new <- as.Date(dups4$visit_date_new, origin="1970-01-01")
 
-#START DATES
-        sum(is.na(dups3$start_date)) #214 NAs
-        sum(is.na(dups4$start_date_new)) #15 NAs - 199 mods
-        
-#END DATES
-        sum(is.na(dups3$end_date)) #206 NAs
-        sum(is.na(dups4$end_date_new)) #7 NAs - 199 mods
-#VISITED VET DATES
-        sum(is.na(dups3$visit_date)) #250 NAs
-        sum(is.na(dups4$visit_date_new)) #18 NAs - 232 mods
-
 #recreate duplicate columns to identify changes in the duplications
         dups4 <- get_duplications(dups4)
-        sum(dups4$duplications) #1698 duplications
-        sum(dups4$complete_duplications) #731 complete duplications have appeared 
-        #now because of added missing data
-
+        
+#reapply get_complete_dup_info to find the last complete duplicates in the data 
         dups4 <- dups4 %>%
                 dplyr::group_by(complete_dups_ID) %>%
                 dplyr::do(get_complete_dup_info(.)) %>%
                 dplyr::ungroup()
-
+        
+#Make a new dataset that contains only the most recent entry from complete 
+#duplicates and deletes all older complete duplicates        
         dups5 <- subset(dups4, (dups4$complete_duplications == FALSE) |
                                 (dups4$complete_duplications == TRUE & 
                                          dups4$last_observation_comp == TRUE))
-        length(dups4$ID) - length(dups5$ID) #This removes 375 data entries 
+        length(dups4$ID) - length(dups5$ID) #This removes 385 data entries 
 
 #recreate duplicate columns to identify changes in the duplications
         dups5 <- get_duplications(dups5)
-        sum(dups5$duplications) #1037 duplications
-        sum(dups5$complete_duplications) #0 complete duplications 
 
-#STEP 3 OF CLEANING – REPLACE ERRORS IN THE DATA FROM THE DUPLICATIONS 
+#STEP 3 OF CLEANING – REPLACE ERRORS IN THE DATA FROM THE DUPLICATIONS
 
-        get_errors <- function (X,a,b,c,d) {
-                X <- setDT(X)[, paste("SD_UP_error", d, sep = "") := (X[[a]] > X$date_recorded)][]
-                X <- setDT(X)[, paste("SD_DOB_error", d, sep = "") := (X[[a]] < X$date_of_birth)][]
-                X <- setDT(X)[, paste("ED_UP_error", d, sep = "") := (X[[b]] > X$date_recorded)][]
-                X <- setDT(X)[, paste("ED_DOB_error", d, sep = "") := (X[[b]] < X$date_of_birth)][]
-                X <- setDT(X)[, paste("VD_DOB_error", d, sep = "") := (X[[c]] < X$date_of_birth)][]
-                X <- setDT(X)[, paste("SD_VD_error", d, sep = "") := (X[[a]] > X[[b]]) & (X[[a]] > X[[c]])][]
-                X <- setDT(X)[, paste("ED_VD_error", d, sep = "") := (X[[b]] < X[[a]]) &  (X[[b]] < X[[c]])][]
+#get_errors identifies common errors in date columns, e.g
+#errors where a certain date is later than an upper limit (e.g the date when the
+#data was entered, a deadline) or earlier than a lower limit (e.g date of birth,
+#the beginning of time) or where a date is later/earlier than 2 other dates
+#and that does not seem to be logicially correct (e.g if a start date is
+#after an end date and a visit date or if an end date is before a start date
+#and a visit date).
+
+#get_errors can be editied to generated to identify the type of errors 
+#encountered in the data. VD_UP_error is not included in this analysis due to 
+#the fact it wasn't appropriate for the original data, but it is acknowledged 
+#that this may be an error in other scenarios
+
+        
+        get_errors <- function (X, var1 = "start_date_new", var2 = "end_date_new", 
+                                var3 = "visit_date_new", upper_limit = "date_recorded", 
+                                lower_limit = "date_of_birth", error_name1 = "SD_UP_error", 
+                                error_name2 = "ED_UP_error", error_name3 = "SD_LOW_error", 
+                                error_name4 = "ED_LOW_error", error_name5 = "VD_LOW_error", 
+                                error_name6 = "SD_LATE_error", error_name7 = "ED_EARLY_error", 
+                                any_errors = "any_errors", spacer = "") {
+                X[, paste(error_name1, spacer, sep = "")] <-  X[[var1]] > X[[upper_limit]]
+                X[, paste(error_name2, spacer, sep = "")] <-  X[[var2]] > X[[upper_limit]]
+                X[, paste(error_name3, spacer, sep = "")] <-  X[[var1]] < X[[lower_limit]]
+                X[, paste(error_name4, spacer, sep = "")] <-  X[[var2]] < X[[lower_limit]]
+                X[, paste(error_name5, spacer, sep = "")] <-  X[[var3]] < X[[lower_limit]]
+                X[, paste(error_name6, spacer, sep = "")] <-  (X[[var1]] > X[[var2]]) & (X[[var1]] > X[[var3]])
+                X[, paste(error_name7, spacer, sep = "")] <-  (X[[var2]] < X[[var1]]) & (X[[var2]] < X[[var3]])
+                #Column to identify whether any errors exist within that row
+                X[, paste(any_errors, spacer, sep = "")] <- X[, paste(error_name1, spacer, sep = "")] == TRUE |
+                        X[, paste(error_name2, spacer, sep = "")] == TRUE | X[, paste(error_name3, spacer, sep = "")] == TRUE |
+                        X[, paste(error_name4, spacer, sep = "")] == TRUE | X[, paste(error_name5, spacer, sep = "")] == TRUE |
+                        X[, paste(error_name6, spacer, sep = "")] == TRUE | X[, paste(error_name7, spacer, sep = "")] == TRUE
+                X[[paste(any_errors, spacer, sep = "")]][is.na(X[[paste(any_errors, spacer, sep = "")]])] <- FALSE
                 return(X)
         }
         
-        dups5 <- subset(dups5, select = 1:(which("VD_lead10" == colnames(dups5))-1))
-        dups5 <- get_errors(dups5, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
+        dups5 <- get_errors(X = dups5)
         
-        get_lags_leads_errors <- function(X, n) {
-                #SDs
+        get_lags_leads_errors <- function(X, n, col1 = "SD_lag", col2 = "SD_lead", 
+                                          col3 = "ED_lag", col4 = "ED_lead", 
+                                          col5 = "VD_lag", col6 = "VD_lead") {
                 for(i in 1:n) {
-                        X <- get_errors(X, a = paste("SD_lag", i, sep=""), 
-                                        b = paste("end_date_new", i, sep=""), 
-                                        c = paste("visit_date_new", i, sep=""), 
-                                        d = paste("_SD_lag", i, sep=""))
-                }
-                for(i in 1:n) {
-                        X <- get_errors(X, a = paste("SD_lead", i, sep=""), 
-                                        b = paste("end_date_new", i, sep=""), 
-                                        c = paste("visit_date_new", i, sep=""), 
-                                        d = paste("_SD_lead", i, sep=""))
-                }
-                #EDs
-                for(i in 1:n) {
-                        X <- get_errors(X, a = paste("start_date_new", i, sep=""), 
-                                        b = paste("ED_lag", i, sep=""), 
-                                        c = paste("visit_date_new", i, sep=""), 
-                                        d = paste("_ED_lag", i, sep=""))
-                }
-                for(i in 1:n) {
-                        X <- get_errors(X, a = paste("start_date_new", i, sep=""), 
-                                        b = paste("ED_lead", i, sep=""), 
-                                        c = paste("visit_date_new", i, sep=""), 
-                                        d = paste("_ED_lead", i, sep=""))
-                }
-                #VDs
-                for(i in 1:n) {
-                        X <- get_errors(X, a = paste("start_date_new", i, sep=""), 
-                                        b = paste("end_date_new", i, sep=""), 
-                                        c = paste("VD_lag", i, sep=""), 
-                                        d = paste("_VD_lag", i, sep=""))
-                }
-                for(i in 1:n) {
-                        X <- get_errors(X, a = paste("start_date_new", i, sep=""), 
-                                        b = paste("end_date_new", i, sep=""), 
-                                        c = paste("VD_lead", i, sep=""), 
-                                        d = paste("_VD_lead", i, sep=""))
+                        X <- get_errors(X, var1 = paste(col1, i, sep=""),
+                                        spacer = paste("_", col1, i, sep=""))
+                        X <- get_errors(X, var1 = paste(col2, i, sep=""),
+                                        spacer = paste("_", col2, i, sep=""))
+                        X <- get_errors(X, var2 = paste(col3, i, sep=""),
+                                        spacer = paste("_", col3, i, sep=""))
+                        X <- get_errors(X, var2 = paste(col4, i, sep=""),
+                                        spacer = paste("_", col4, i, sep=""))
+                        X <- get_errors(X, var3 = paste(col5, i, sep=""),
+                                        spacer = paste("_", col5, i, sep=""))
+                        X <- get_errors(X, var3 = paste(col6, i, sep=""),
+                                        spacer = paste("_", col6, i, sep=""))
                 }
                 return(X)
         }
-
-
-        dups5 <- ddply(dups5, 1, get_lags_leads_errors, n)
         
-        replace_errors <- function(X, n) {
+        dups5 <- get_lags_leads_errors(dups5, n)
+        
+        replace_errors <- function(X, n, error_name, var1, var2, var3, print_results = TRUE) {
+                if(print_results == TRUE) {
+                print(paste("Total number of", paste(error_name, "s", sep =""), "before corrections"))
+                a <- sum(X[[paste(error_name)]], na.rm = TRUE)
+                print(a) }
                 for(i in 1:n) { 
-                        #replace SD_UP errors
-                        X$start_date_new <- ifelse(X$SD_UP_error == FALSE |
-                           is.na(X$SD_UP_error), 
-                   X$start_date_new, 
-                   ifelse(X$SD_UP_error == TRUE & 
-                                  (X[, paste("SD_UP_error_SD_lag", i, sep="")] == FALSE &
-                                           !is.na(X[, paste("SD_UP_error_SD_lag", i, sep="")])) &
-                                  (X[, paste("SD_DOB_error_SD_lag", i, sep="")] == FALSE &
-                                           !is.na(X[, paste("SD_DOB_error_SD_lag", i, sep="")])), 
-                          X[, paste("SD_lag", i, sep="")], 
-                          ifelse(X$SD_UP_error == TRUE & 
-                                         (X[, paste("SD_UP_error_SD_lead", i, sep="")] == FALSE &
-                                                  !is.na(X[, paste("SD_UP_error_SD_lead", i, sep="")])) &
-                                         (X[, paste("SD_DOB_error_SD_lead", i, sep="")] == FALSE &
-                                                  !is.na(X[, paste("SD_DOB_error_SD_lead", i, sep="")])),  
-                                 X[, paste("SD_lead", i, sep="")], X$start_date_new))) 
+                        X[[var1]] <- ifelse(X[[error_name]] == FALSE | is.na(X[[error_name]]), X[[var1]], 
+                                            ifelse(X[[error_name]] == TRUE & X[[paste("any_errors_", var2, i, sep="")]] == FALSE &
+                                                           !is.na(X[[paste(var2, i, sep="")]]), 
+                                                   X[[paste(var2, i, sep="")]],
+                                                   ifelse(X[[error_name]] == TRUE & X[[paste("any_errors_", var3, i, sep="")]] == FALSE &
+                                                                  !is.na(X[[paste(var3, i, sep="")]]), 
+                                                          X[[paste(var3, i, sep="")]], X[[var1]])))
+                        X <- get_errors(X)
+                        X <- get_lags_leads_errors(X, n)
+                        #This prints out results after each iteration of 'n' so
+                        #it can be clearly visualised where the corretions are made
+                        if(print_results == TRUE) {
+                        print(paste("Total number of ", paste(error_name, "s", sep =""), " after n = ", i, sep=""))
+                        print(sum(X[[paste(error_name)]], na.rm = TRUE))
+                        }
                 }
-                for(i in 1:n) { 
-                        #replace SD_DOB ERRORS
-                        X$start_date_new <- ifelse(X$SD_DOB_error == FALSE |
-                           is.na(X$SD_DOB_error), 
-                   X$start_date_new, 
-                   ifelse(X$SD_DOB_error == TRUE & 
-                                  (X[, paste("SD_DOB_error_SD_lag", i, sep="")] == FALSE &
-                                           !is.na(X[, paste("SD_DOB_error_SD_lag", i, sep="")])) & 
-                                  (X[, paste("SD_UP_error_SD_lag", i, sep="")] == FALSE &
-                                           !is.na(X[, paste("SD_UP_error_SD_lag", i, sep="")])), 
-                          X[, paste("SD_lag", i, sep="")], 
-                          ifelse(X$SD_DOB_error == TRUE & 
-                                         (X[, paste("SD_DOB_error_SD_lead", i, sep="")] == FALSE &
-                                                  !is.na(X[, paste("SD_DOB_error_SD_lead", i, sep="")])) & 
-                                         (X[, paste("SD_UP_error_SD_lead", i, sep="")] == FALSE &
-                                                  !is.na(X[, paste("SD_UP_error_SD_lead", i, sep="")])),
-                                 X[, paste("SD_lead", i, sep="")], X$start_date_new)))
+                if(print_results == TRUE) {
+                print(paste("Total number of", paste(error_name, "s", sep =""), "corrected"))
+                b <- sum(X[[paste(error_name)]], na.rm = TRUE)
+                print(a-b)
                 }
-                for(i in 1:n) { 
-                        #replace ED_UP ERRORS
-                        X$end_date_new <- ifelse(X$ED_UP_error == FALSE |
-                         is.na(X$ED_UP_error), 
-                 X$end_date_new, 
-                 ifelse(X$ED_UP_error == TRUE & 
-                                (X[, paste("ED_UP_error_ED_lag", i, sep="")] == FALSE &
-                                         !is.na(X[, paste("ED_UP_error_ED_lag", i, sep="")])) & 
-                                (X[, paste("ED_DOB_error_ED_lag", i, sep="")] == FALSE &
-                                         !is.na(X[, paste("ED_DOB_error_ED_lag", i, sep="")])),  
-                        X[, paste("ED_lag", i, sep="")], 
-                        ifelse(X$ED_UP_error == TRUE & 
-                                       (X[, paste("ED_UP_error_ED_lead", i, sep="")] == FALSE &
-                                                !is.na(X[, paste("ED_UP_error_ED_lead", i, sep="")])) & 
-                                       (X[, paste("ED_DOB_error_ED_lead", i, sep="")] == FALSE &
-                                                !is.na(X[, paste("ED_DOB_error_ED_lead", i, sep="")])),  
-                               X[, paste("ED_lead", i, sep="")], X$end_date_new))) 
-                }
-                for(i in 1:n) { 
-                        #replace ED_DOB ERRORS
-                        X$end_date_new <- ifelse(X$ED_DOB_error == FALSE |
-                         is.na(X$ED_DOB_error), 
-                 X$end_date_new, 
-                 ifelse(X$ED_DOB_error == TRUE & 
-                                (X[, paste("ED_DOB_error_ED_lag", i, sep="")] == FALSE &
-                                         !is.na(X[, paste("ED_DOB_error_ED_lag", i, sep="")])) & 
-                                (X[, paste("ED_UP_error_ED_lag", i, sep="")] == FALSE &
-                                         !is.na(X[, paste("ED_UP_error_ED_lag", i, sep="")])), 
-                        X[, paste("ED_lag", i, sep="")], 
-                        ifelse(X$ED_DOB_error == TRUE & 
-                                       (X[, paste("ED_DOB_error_ED_lead", i, sep="")] == FALSE &
-                                                !is.na(X[, paste("ED_DOB_error_ED_lead", i, sep="")])) & 
-                                       (X[, paste("ED_UP_error_ED_lead", i, sep="")] == FALSE &
-                                                !is.na(X[, paste("ED_UP_error_ED_lead", i, sep="")])), 
-                               X[, paste("ED_lead", i, sep="")], X$end_date_new))) 
-                }
-                for(i in 1:n) { 
-                        #replace VVD_DOB ERRORS
-                        X$visit_date_new <- ifelse(X$VD_DOB_error == FALSE |
-                           is.na(X$VD_DOB_error), 
-                   X$visit_date_new, 
-                   ifelse(X$VD_DOB_error == TRUE & 
-                                  (X[, paste("VD_DOB_error_VD_lag", i, sep="")] == FALSE &
-                                           !is.na(X[, paste("VD_DOB_error_VD_lag", i, sep="")])), 
-                          X[, paste("VD_lag", i, sep="")], 
-                          ifelse(X$VD_DOB_error == TRUE & 
-                                         (X[, paste("VD_DOB_error_VD_lead", i, sep="")] == FALSE &
-                                                  !is.na(X[, paste("VD_DOB_error_VD_lead", i, sep="")])), 
-                                 X[, paste("VD_lead", i, sep="")], X$visit_date_new))) 
-                }
-                for(i in 1:n) { 
-                        #replace SD_VVD ERRORS
-                        X$start_date_new <- ifelse(X$SD_VD_error == FALSE |
-                           is.na(X$SD_VD_error), 
-                   X$start_date_new, 
-                   ifelse(X$SD_VD_error == TRUE & 
-                                  (X[, paste("SD_VD_error_SD_lag", i, sep="")] == FALSE &
-                                           !is.na(X[, paste("SD_VD_error_SD_lag", i, sep="")])) & 
-                                  (X[, paste("SD_UP_error_SD_lag", i, sep="")] == FALSE &
-                                           !is.na(X[, paste("SD_UP_error_SD_lag", i, sep="")])) &
-                                  (X[, paste("SD_DOB_error_SD_lag", i, sep="")] == FALSE &
-                                           !is.na(X[, paste("SD_DOB_error_SD_lag", i, sep="")])), 
-                          X[, paste("SD_lag", i, sep="")], 
-                          ifelse(X$SD_VD_error == TRUE & 
-                                         (X[, paste("SD_VD_error_SD_lead", i, sep="")] == FALSE &
-                                                  !is.na(X[, paste("SD_VD_error_SD_lead", i, sep="")])) & 
-                                         (X[, paste("SD_UP_error_SD_lead", i, sep="")] == FALSE &
-                                                  !is.na(X[, paste("SD_UP_error_SD_lead", i, sep="")])) &
-                                         (X[, paste("SD_DOB_error_SD_lead", i, sep="")] == FALSE &
-                                                  !is.na(X[, paste("SD_DOB_error_SD_lead", i, sep="")])), 
-                                 X[, paste("SD_lead", i, sep="")], X$start_date_new))) 
-                }
-                for(i in 1:n) { 
-                        #replace ED_VVD ERRORS
-                        X$end_date_new <- ifelse(X$ED_VD_error == FALSE |
-                         is.na(X$ED_VD_error), 
-                 X$end_date_new, 
-                 ifelse(X$ED_VD_error == TRUE & 
-                                (X[, paste("ED_VD_error_ED_lag", i, sep="")] == FALSE &
-                                         !is.na(X[, paste("ED_VD_error_ED_lag", i, sep="")])) & 
-                                (X[, paste("ED_UP_error_ED_lag", i, sep="")] == FALSE &
-                                         !is.na(X[, paste("ED_UP_error_ED_lag", i, sep="")])) &
-                                (X[, paste("ED_DOB_error_ED_lag", i, sep="")] == FALSE &
-                                         !is.na(X[, paste("ED_DOB_error_ED_lag", i, sep="")])), 
-                        X[, paste("ED_lag", i, sep="")], 
-                        ifelse(X$ED_VD_error == TRUE & 
-                                       (X[, paste("ED_VD_error_ED_lead", i, sep="")] == FALSE &
-                                                !is.na(X[, paste("ED_VD_error_ED_lead", i, sep="")])) &
-                                       (X[, paste("ED_UP_error_ED_lead", i, sep="")] == FALSE &
-                                                !is.na(X[, paste("ED_UP_error_ED_lead", i, sep="")])) &
-                                       (X[, paste("ED_DOB_error_ED_lead", i, sep="")] == FALSE &
-                                                !is.na(X[, paste("ED_DOB_error_ED_lead", i, sep="")])), 
-                               X[, paste("ED_lead", i, sep="")], X$end_date_new))) 
-                } 
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
                 return(X)
-                }
-
-        dups6 <- replace_errors(dups5, n)
-
+        }
+        
+        dups6 <- replace_errors(dups5, n, "SD_UP_error", "start_date_new", "SD_lag", "SD_lead", print_results = FALSE)
+        dups6 <- replace_errors(dups6, n, "ED_UP_error", "end_date_new", "ED_lag", "ED_lead", print_results = FALSE)
+        dups6 <- replace_errors(dups6, n, "SD_LOW_error", "start_date_new", "SD_lag", "SD_lead", print_results = FALSE)
+        dups6 <- replace_errors(dups6, n, "ED_LOW_error", "end_date_new", "ED_lag", "ED_lead", print_results = FALSE)
+        dups6 <- replace_errors(dups6, n, "VD_LOW_error", "visit_date_new", "VD_lag", "VD_lead", print_results = FALSE)
+        dups6 <- replace_errors(dups6, n, "SD_LATE_error", "start_date_new", "SD_lag", "SD_lead", print_results = FALSE)
+        dups6 <- replace_errors(dups6, n, "ED_EARLY_error", "end_date_new", "ED_lag", "ED_lead", print_results = FALSE)
 
 #Transform the date columns that have been edited back to human-readable format
         dups6$end_date_new <- as.Date(dups6$end_date_new, origin="1970-01-01")
         dups6$start_date_new <- as.Date(dups6$start_date_new, origin="1970-01-01")
         dups6$visit_date_new <- as.Date(dups6$visit_date_new, origin="1970-01-01")
 
-#find out numbers replaced
-        sum(dups5$SD_UP_error, na.rm = TRUE) - sum(dups6$SD_UP_error, na.rm = TRUE) #40 replaced
-        sum(dups5$SD_DOB_error, na.rm = TRUE) - sum(dups6$SD_DOB_error, na.rm = TRUE) #51 replaced
-        sum(dups5$ED_UP_error, na.rm = TRUE) - sum(dups6$ED_UP_error, na.rm = TRUE) # 38 replaced
-        sum(dups5$ED_DOB_error, na.rm = TRUE) - sum(dups6$ED_DOB_error, na.rm = TRUE) #108 replaced
-        sum(dups5$VD_DOB_error, na.rm = TRUE) - sum(dups6$VD_DOB_error, na.rm = TRUE) #87 replaced
-        sum(dups5$SD_VD_error, na.rm = TRUE) - sum(dups6$SD_VD_error, na.rm = TRUE) #13 replaced
-        sum(dups5$ED_VD_error, na.rm = TRUE) - sum(dups6$ED_VD_error, na.rm = TRUE) #96 replaced
-
 #recreate duplicate columns to identify changes in the duplications
         dups6 <- get_duplications(dups6)
-        sum(dups6$duplications) #1037 duplications
-        sum(dups6$complete_duplications) #463 complete duplications have appeared 
-        #now because of added missing data
         
         dups6 <- dups6 %>%
                 dplyr::group_by(complete_dups_ID) %>%
@@ -466,106 +288,51 @@
         
         dups7 <- subset(dups6, (dups6$complete_duplications == FALSE) |
                                 (dups6$complete_duplications == TRUE & dups6$last_observation_comp == TRUE))
-        length(dups6$ID) - length(dups7$ID) #This removes 250 data entries 
+        length(dups6$ID) - length(dups7$ID) #This removes 264 data entries 
 
 #recreate duplicate columns to identify changes in the duplications
         dups7 <- get_duplications(dups7)
-        sum(dups7$duplications) #603 duplications
-        sum(dups7$complete_duplications) #0 complete duplications 
-
+        
+        dups8 <- subset(dups7, select = 1:(which("last_observation" == colnames(dups7))-1))
 
 #STEP 4 – CORRECT ANY ERRORS IN THE DUPLICATIONS
 
-        get_alternative_dates <- function (X) {
-                #work out the alternative dates for the SDs
-                X$start_date_plus_day <-  as.Date(X$start_date_new) %m+% days(1)
-                X$start_date_minus_day <-  as.Date(X$start_date_new) %m+% days(-1)
-                X$start_date_plus_week <-  as.Date(X$start_date_new) %m+% weeks(1)
-                X$start_date_minus_week <-  as.Date(X$start_date_new) %m+% weeks(-1)
-                X$start_date_plus_month <- as.Date(X$start_date_new) %m+% months(1)
-                X$start_date_minus_month <- as.Date(X$start_date_new) %m+% months(-1)
-                X$start_date_plus_year <- as.Date(X$start_date_new) %m+% years(1)
-                X$start_date_minus_year <- as.Date(X$start_date_new) %m+% years(-1)       
-                #work out the alternative dates for the EDs
-                X$end_date_plus_day <-  as.Date(X$end_date_new) %m+% days(1)
-                X$end_date_minus_day <-  as.Date(X$end_date_new) %m+% days(-1)
-                X$end_date_plus_week <-  as.Date(X$end_date_new) %m+% weeks(1)
-                X$end_date_minus_week <-  as.Date(X$end_date_new) %m+% weeks(-1)
-                X$end_date_plus_month <- as.Date(X$end_date_new) %m+% months(1)
-                X$end_date_minus_month <- as.Date(X$end_date_new) %m+% months(-1)
-                X$end_date_plus_year <- as.Date(X$end_date_new) %m+% years(1)
-                X$end_date_minus_year <- as.Date(X$end_date_new) %m+% years(-1)
-                #work out the alternative dates for the VDs
-                X$visit_date_plus_day <-  as.Date(X$visit_date_new) %m+% days(1)
-                X$visit_date_minus_day <-  as.Date(X$visit_date_new) %m+% days(-1)
-                X$visit_date_plus_week <-  as.Date(X$visit_date_new) %m+% weeks(1)
-                X$visit_date_minus_week <-  as.Date(X$visit_date_new) %m+% weeks(-1)
-                X$visit_date_plus_month <- as.Date(X$visit_date_new) %m+% months(1)
-                X$visit_date_minus_month <- as.Date(X$visit_date_new) %m+% months(-1)
-                X$visit_date_plus_year <- as.Date(X$visit_date_new) %m+% years(1)
-                X$visit_date_minus_year <- as.Date(X$visit_date_new) %m+% years(-1)
+        get_alternative_dates <- function (X, var1) {
+                X[, paste(var1, "_plus_day", sep = "")] <-  as.Date(X[[var1]]) %m+% days(1)
+                X[, paste(var1, "_minus_day", sep = "")] <-  as.Date(X[[var1]]) %m+% days(-1)
+                X[, paste(var1, "_plus_week", sep = "")] <-  as.Date(X[[var1]]) %m+% weeks(1)
+                X[, paste(var1, "_minus_week", sep = "")] <-  as.Date(X[[var1]]) %m+% weeks(-1)
+                X[, paste(var1, "_plus_month", sep = "")] <-  as.Date(X[[var1]]) %m+% months(1)
+                X[, paste(var1, "_minus_month", sep = "")] <-  as.Date(X[[var1]]) %m+% months(-1)
+                X[, paste(var1, "_plus_year", sep = "")] <-  as.Date(X[[var1]]) %m+% years(1)
+                X[, paste(var1, "_minus_year", sep = "")] <-  as.Date(X[[var1]]) %m+% years(-1)
                 return(X)
         }
 
-        dups8 <- subset(dups7, select = 1:(which("last_observation" == colnames(dups7))-1))
-        dups8 <- get_alternative_dates(dups8)
+        dups8 <- get_alternative_dates(dups8, "start_date_new")
+        dups8 <- get_alternative_dates(dups8, "end_date_new")
+        dups8 <- get_alternative_dates(dups8, "visit_date_new")
 
-        get_alternative_dates_errors <- function(X){
-                #start_dates
-                X <- get_errors(X, a = "start_date_minus_day", b = "end_date_new", 
-                                c = "visit_date_new", d = "_SD_minus_day")
-                X <- get_errors(X, a = "start_date_minus_week", b = "end_date_new", 
-                                c = "visit_date_new",  d = "_SD_minus_week")
-                X <- get_errors(X, a = "start_date_minus_month", b = "end_date_new", 
-                                c = "visit_date_new",  d = "_SD_minus_month")
-                X <- get_errors(X, a = "start_date_minus_year", b = "end_date_new", 
-                                c = "visit_date_new",  d = "_SD_minus_year")
-                X <- get_errors(X, a = "start_date_plus_day", b = "end_date_new", 
-                                c = "visit_date_new",  d = "_SD_plus_day")
-                X <- get_errors(X, a = "start_date_plus_week", b = "end_date_new", 
-                                c = "visit_date_new",  d = "_SD_plus_week")
-                X <- get_errors(X, a = "start_date_plus_month", b = "end_date_new", 
-                                c = "visit_date_new",  d = "_SD_plus_month")
-                X <- get_errors(X, a = "start_date_plus_year", b = "end_date_new", 
-                                c = "visit_date_new",  d = "_SD_plus_year")
-                #end_dates
-                X <- get_errors(X, a = "start_date_new", b = "end_date_minus_day", 
-                                c = "visit_date_new", d = "_ED_minus_day")
-                X <- get_errors(X, a = "start_date_new", b = "end_date_minus_week", 
-                                c = "visit_date_new",  d = "_ED_minus_week")
-                X <- get_errors(X, a = "start_date_new", b = "end_date_minus_month", 
-                                c = "visit_date_new",  d = "_ED_minus_month")
-                X <- get_errors(X, a = "start_date_new", b = "end_date_minus_year", 
-                                c = "visit_date_new",  d = "_ED_minus_year")
-                X <- get_errors(X, a = "start_date_new", b = "end_date_plus_day", 
-                                c = "visit_date_new",  d = "_ED_plus_day")
-                X <- get_errors(X, a = "start_date_new", b = "end_date_plus_week", 
-                                c = "visit_date_new",  d = "_ED_plus_week")
-                X <- get_errors(X, a = "start_date_new", b = "end_date_plus_month", 
-                                c = "visit_date_new",  d = "_ED_plus_month")
-                X <- get_errors(X, a = "start_date_new", b = "end_date_plus_year", 
-                                c = "visit_date_new",  d = "_ED_plus_year")
-                #visit_dates
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", 
-                                c = "visit_date_minus_day", d = "_VD_minus_day")
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", 
-                                c = "visit_date_minus_week",  d = "_VD_minus_week")
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", 
-                                c = "visit_date_minus_month",  d = "_VD_minus_month")
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", 
-                                c = "visit_date_minus_year",  d = "_VD_minus_year")
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", 
-                                c = "visit_date_plus_day",  d = "_VD_plus_day")
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", 
-                                c = "visit_date_plus_week",  d = "_VD_plus_week")
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", 
-                                c = "visit_date_plus_month",  d = "_VD_plus_month")
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", 
-                                c = "visit_date_plus_year",  d = "_VD_plus_year")
+        get_alternative_dates_errors <- function(X, n, col1 = "start_date_new", col2 = "end_date_new", 
+                                                 col3 = "visit_date_new", time_diff) {
+                X <- get_errors(X, var1 = paste(col1, "_", time_diff, sep=""),
+                                spacer = paste("_", time_diff, sep=""))
+                X <- get_errors(X, var2 = paste(col2, "_", time_diff, sep=""),
+                                spacer = paste("_", time_diff, sep=""))
+                X <- get_errors(X, var3 = paste(col3, "_", time_diff, sep=""),
+                                spacer = paste("_", time_diff, sep=""))
+                return(X)
         }
-        dups8 <- get_errors(dups8, a = "start_date_new", b = "end_date_new", 
-                            c = "visit_date_new", d = "")
-        dups8 <- get_alternative_dates_errors(dups8)
+        
+        dups8 <- get_errors(dups8)
+        dups8 <- get_alternative_dates_errors(dups8, n, time_diff = "plus_day")
+        dups8 <- get_alternative_dates_errors(dups8, n, time_diff = "plus_week")
+        dups8 <- get_alternative_dates_errors(dups8, n, time_diff = "plus_month")
+        dups8 <- get_alternative_dates_errors(dups8, n, time_diff = "plus_year")
+        dups8 <- get_alternative_dates_errors(dups8, n, time_diff = "minus_day")
+        dups8 <- get_alternative_dates_errors(dups8, n, time_diff = "minus_week")
+        dups8 <- get_alternative_dates_errors(dups8, n, time_diff = "minus_month")
+        dups8 <- get_alternative_dates_errors(dups8, n, time_diff = "minus_year")
 
 #SD_UP_errors
                 correct_SD_UP_errors <- function (X) {
