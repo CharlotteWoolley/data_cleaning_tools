@@ -288,11 +288,12 @@
         
         dups7 <- subset(dups6, (dups6$complete_duplications == FALSE) |
                                 (dups6$complete_duplications == TRUE & dups6$last_observation_comp == TRUE))
-        length(dups6$ID) - length(dups7$ID) #This removes 264 data entries 
+        length(dups6$ID) - length(dups7$ID) #This removes 242 data entries 
 
 #recreate duplicate columns to identify changes in the duplications
         dups7 <- get_duplications(dups7)
         
+        #Removes any irrelevant columns
         dups8 <- subset(dups7, select = 1:(which("last_observation" == colnames(dups7))-1))
 
 #STEP 4 – CORRECT ANY ERRORS IN THE DUPLICATIONS
@@ -316,13 +317,14 @@
         get_alternative_dates_errors <- function(X, n, col1 = "start_date_new", col2 = "end_date_new", 
                                                  col3 = "visit_date_new", time_diff) {
                 X <- get_errors(X, var1 = paste(col1, "_", time_diff, sep=""),
-                                spacer = paste("_", time_diff, sep=""))
+                                spacer = paste("_", col1, "_", time_diff, sep=""))
                 X <- get_errors(X, var2 = paste(col2, "_", time_diff, sep=""),
-                                spacer = paste("_", time_diff, sep=""))
+                                spacer = paste("_", col2, "_", time_diff, sep=""))
                 X <- get_errors(X, var3 = paste(col3, "_", time_diff, sep=""),
-                                spacer = paste("_", time_diff, sep=""))
+                                spacer = paste("_", col3, "_", time_diff, sep=""))
                 return(X)
         }
+
         
         dups8 <- get_errors(dups8)
         dups8 <- get_alternative_dates_errors(dups8, n, time_diff = "plus_day")
@@ -334,366 +336,121 @@
         dups8 <- get_alternative_dates_errors(dups8, n, time_diff = "minus_month")
         dups8 <- get_alternative_dates_errors(dups8, n, time_diff = "minus_year")
 
-#SD_UP_errors
-                correct_SD_UP_errors <- function (X) {
-                        print("Total SD_UP_errors")
-                        print(sum(X$SD_UP_error, na.rm = TRUE)) 
-                        X$start_date_new <- ifelse((X$SD_UP_error == TRUE & !is.na(X$SD_UP_error)) &
-                                                           (X$SD_UP_error_SD_minus_day == FALSE &
-                                                                    !is.na(X$SD_UP_error_SD_minus_day)) &
-                                                           (X$SD_DOB_error_SD_minus_day !=TRUE),
-                                                   X$start_date_minus_day, X$start_date_new)
-                        X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                        X <- get_alternative_dates_errors(X)
-                        print("SD_UP_errors after corrections by day")
-                        print(sum(X$SD_UP_error, na.rm = TRUE))  
-                        X$start_date_new <- ifelse((X$SD_UP_error == TRUE & !is.na(X$SD_UP_error)) &
-                                                           (X$SD_UP_error_SD_minus_week == FALSE &
-                                                                    !is.na(X$SD_UP_error_SD_minus_week)) &
-                                                           (X$SD_DOB_error_SD_minus_week !=TRUE),
-                                                   X$start_date_minus_week, X$start_date_new)
-                        X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                        X <- get_alternative_dates_errors(X)
-                        print("SD_UP_errors after corrections by week")
-                        print(sum(X$SD_UP_error, na.rm = TRUE))  
-                        X$start_date_new <- ifelse((X$SD_UP_error == TRUE & !is.na(X$SD_UP_error)) &
-                                                           (X$SD_UP_error_SD_minus_month == FALSE &
-                                                                    !is.na(X$SD_UP_error_SD_minus_month)) &
-                                                           (X$SD_DOB_error_SD_minus_month !=TRUE),
-                                                   X$start_date_minus_month, X$start_date_new)
-                        X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                        X <- get_alternative_dates_errors(X)
-                        print("SD_UP_errors after corrections by month")
-                        print(sum(X$SD_UP_error, na.rm = TRUE)) 
-                        X$start_date_new <- ifelse((X$SD_UP_error == TRUE & !is.na(X$SD_UP_error)) &
-                                                           (X$SD_UP_error_SD_minus_year == FALSE &
-                                                                    !is.na(X$SD_UP_error_SD_minus_year)) &
-                                                           (X$SD_DOB_error_SD_minus_year !=TRUE),
-                                                   X$start_date_minus_year, X$start_date_new)
-                        X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                        X <- get_alternative_dates_errors(X)
-                        print("SD_UP_errors after corrections by year")
-                        print(sum(X$SD_UP_error, na.rm = TRUE))     
-                        X$start_date_new <- ifelse(X$SD_UP_error == TRUE &
-                                                           !is.na(X$SD_UP_error), NA, X$start_date_new)
-                        X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                        X <- get_alternative_dates_errors(X)
-                        print("SD_UP_errors after deletions")
-                        print(sum(X$SD_UP_error, na.rm = TRUE))    
-                        return(X)
+        correct_errors <- function(X, n, error_name, var1, time_diff1 = "plus_day", time_diff2 = "minus_day",
+                                   time_diff3 = "plus_week", time_diff4 = "minus_week", 
+                                   time_diff5 = "plus_month", time_diff6 = "minus_month",
+                                   time_diff7 = "plus_year", time_diff8 = "minus_year", print_results = TRUE) {
+                if(print_results == TRUE) {
+                        print(paste("Total number of", paste(error_name, "s", sep =""), "before corrections"))
+                        a <- sum(X[[paste(error_name)]], na.rm = TRUE)
+                        print(a) }
+                X[[var1]] <- ifelse(X[[error_name]] == FALSE | is.na(X[[error_name]]), X[[var1]], 
+                                    ifelse(X[[error_name]] == TRUE & X[[paste("any_errors_", var1, "_", time_diff1, sep="")]] == FALSE &
+                                                   !is.na(X[[paste(var1, "_", time_diff1, sep="")]]), 
+                                           X[[paste(var1, "_", time_diff1, sep="")]], X[[var1]]))
+                X <- get_errors(X)
+                X <- get_alternative_dates_errors(X, n, time_diff = time_diff1)
+                if(print_results == TRUE) {
+                        print(paste("Total number of", paste(error_name, "s", sep =""), "corrected with", time_diff1))
+                        b <- sum(X[[paste(error_name)]], na.rm = TRUE)
+                        print(a-b)
                 }
-        
-        #SD_DOB_errors
-        correct_SD_DOB_errors <- function (X) {
-                print("Total SD_DOB_errors")
-                print(sum(X$SD_DOB_error, na.rm = TRUE)) 
-                X$start_date_new <- ifelse((X$SD_DOB_error == TRUE & !is.na(X$SD_DOB_error)) & 
-                                                   (X$SD_DOB_error_SD_plus_day == FALSE &
-                                                            !is.na(X$SD_DOB_error_SD_plus_day)) &
-                                                   (X$SD_UP_error_SD_plus_day != TRUE),
-                                           X$start_date_plus_day, X$start_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("SD_DOB_errors after corrections by day")
-                print(sum(X$SD_DOB_error, na.rm = TRUE))  
-                X$start_date_new <- ifelse((X$SD_DOB_error == TRUE & !is.na(X$SD_DOB_error)) & 
-                                                   (X$SD_DOB_error_SD_plus_week == FALSE &
-                                                            !is.na(X$SD_DOB_error_SD_plus_week)) &
-                                                   (X$SD_UP_error_SD_plus_week != TRUE),
-                                           X$start_date_plus_week, X$start_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("SD_DOB_errors after corrections by week")
-                print(sum(X$SD_DOB_error, na.rm = TRUE))  
-                X$start_date_new <- ifelse((X$SD_DOB_error == TRUE & !is.na(X$SD_DOB_error)) & 
-                                                   (X$SD_DOB_error_SD_plus_month == FALSE &
-                                                            !is.na(X$SD_DOB_error_SD_plus_month)) &
-                                                   (X$SD_UP_error_SD_plus_month !=TRUE),
-                                           X$start_date_plus_month, X$start_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("SD_DOB_errors after corrections by month")
-                print(sum(X$SD_DOB_error, na.rm = TRUE)) 
-                X$start_date_new <- ifelse((X$SD_DOB_error == TRUE & !is.na(X$SD_DOB_error)) & 
-                                                   (X$SD_DOB_error_SD_plus_year == FALSE &
-                                                            !is.na(X$SD_DOB_error_SD_plus_year)) &
-                                                   (X$SD_UP_error_SD_plus_year !=TRUE),
-                                           X$start_date_plus_year, X$start_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("SD_DOB_errors after corrections by year")
-                print(sum(X$SD_DOB_error, na.rm = TRUE))     
-                X$start_date_new <- ifelse(X$SD_DOB_error == TRUE &
-                                                   !is.na(X$SD_DOB_error), NA, X$start_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("SD_DOB_errors after deletions")
-                print(sum(X$SD_DOB_error, na.rm = TRUE))    
+                X[[var1]] <- ifelse(X[[error_name]] == FALSE | is.na(X[[error_name]]), X[[var1]], 
+                                    ifelse(X[[error_name]] == TRUE & X[[paste("any_errors_", var1, "_", time_diff2, sep="")]] == FALSE &
+                                                   !is.na(X[[paste(var1, "_", time_diff2, sep="")]]), 
+                                           X[[paste(var1, "_", time_diff2, sep="")]], X[[var1]]))
+                X <- get_errors(X)
+                X <- get_alternative_dates_errors(X, n, time_diff = time_diff2)
+                if(print_results == TRUE) {
+                        print(paste("Total number of", paste(error_name, "s", sep =""), "corrected with", time_diff2))
+                        c <- sum(X[[paste(error_name)]], na.rm = TRUE)
+                        print(b-c)
+                }       
+                X[[var1]] <- ifelse(X[[error_name]] == FALSE | is.na(X[[error_name]]), X[[var1]], 
+                                    ifelse(X[[error_name]] == TRUE & X[[paste("any_errors_", var1, "_", time_diff3, sep="")]] == FALSE &
+                                                   !is.na(X[[paste(var1, "_", time_diff3, sep="")]]), 
+                                           X[[paste(var1, "_", time_diff3, sep="")]], X[[var1]]))
+                X <- get_errors(X)
+                X <- get_alternative_dates_errors(X, n, time_diff = time_diff3)
+                if(print_results == TRUE) {
+                        print(paste("Total number of", paste(error_name, "s", sep =""), "corrected with", time_diff3))
+                        d <- sum(X[[paste(error_name)]], na.rm = TRUE)
+                        print(c-d)
+                }       
+                X[[var1]] <- ifelse(X[[error_name]] == FALSE | is.na(X[[error_name]]), X[[var1]], 
+                                    ifelse(X[[error_name]] == TRUE & X[[paste("any_errors_", var1, "_", time_diff4, sep="")]] == FALSE &
+                                                   !is.na(X[[paste(var1, "_", time_diff4, sep="")]]), 
+                                           X[[paste(var1, "_", time_diff4, sep="")]], X[[var1]]))
+                X <- get_errors(X)
+                X <- get_alternative_dates_errors(X, n, time_diff = time_diff4)
+                if(print_results == TRUE) {
+                        print(paste("Total number of", paste(error_name, "s", sep =""), "corrected with", time_diff4))
+                        e <- sum(X[[paste(error_name)]], na.rm = TRUE)
+                        print(d-e)
+                }       
+                X[[var1]] <- ifelse(X[[error_name]] == FALSE | is.na(X[[error_name]]), X[[var1]], 
+                                    ifelse(X[[error_name]] == TRUE & X[[paste("any_errors_", var1, "_", time_diff5, sep="")]] == FALSE &
+                                                   !is.na(X[[paste(var1, "_", time_diff5, sep="")]]), 
+                                           X[[paste(var1, "_", time_diff5, sep="")]], X[[var1]]))
+                X <- get_errors(X)
+                X <- get_alternative_dates_errors(X, n, time_diff = time_diff5)
+                if(print_results == TRUE) {
+                        print(paste("Total number of", paste(error_name, "s", sep =""), "corrected with", time_diff5))
+                        f <- sum(X[[paste(error_name)]], na.rm = TRUE)
+                        print(e-f)
+                }       
+                X[[var1]] <- ifelse(X[[error_name]] == FALSE | is.na(X[[error_name]]), X[[var1]], 
+                                    ifelse(X[[error_name]] == TRUE & X[[paste("any_errors_", var1, "_", time_diff6, sep="")]] == FALSE &
+                                                   !is.na(X[[paste(var1, "_", time_diff6, sep="")]]), 
+                                           X[[paste(var1, "_", time_diff6, sep="")]], X[[var1]]))
+                X <- get_errors(X)
+                X <- get_alternative_dates_errors(X, n, time_diff = time_diff6)
+                if(print_results == TRUE) {
+                        print(paste("Total number of", paste(error_name, "s", sep =""), "corrected with", time_diff6))
+                        g <- sum(X[[paste(error_name)]], na.rm = TRUE)
+                        print(f-g)
+                }       
+                X[[var1]] <- ifelse(X[[error_name]] == FALSE | is.na(X[[error_name]]), X[[var1]], 
+                                    ifelse(X[[error_name]] == TRUE & X[[paste("any_errors_", var1, "_", time_diff7, sep="")]] == FALSE &
+                                                   !is.na(X[[paste(var1, "_", time_diff7, sep="")]]), 
+                                           X[[paste(var1, "_", time_diff7, sep="")]], X[[var1]]))
+                X <- get_errors(X)
+                X <- get_alternative_dates_errors(X, n, time_diff = time_diff7)
+                if(print_results == TRUE) {
+                        print(paste("Total number of", paste(error_name, "s", sep =""), "corrected with", time_diff7))
+                        h <- sum(X[[paste(error_name)]], na.rm = TRUE)
+                        print(g-h)
+                }       
+                X[[var1]] <- ifelse(X[[error_name]] == FALSE | is.na(X[[error_name]]), X[[var1]], 
+                                    ifelse(X[[error_name]] == TRUE & X[[paste("any_errors_", var1, "_", time_diff8, sep="")]] == FALSE &
+                                                   !is.na(X[[paste(var1, "_", time_diff8, sep="")]]), 
+                                           X[[paste(var1, "_", time_diff8, sep="")]], X[[var1]]))
+                X <- get_errors(X)
+                X <- get_alternative_dates_errors(X, n, time_diff = time_diff8)
+                if(print_results == TRUE) {
+                        print(paste("Total number of", paste(error_name, "s", sep =""), "corrected with", time_diff8))
+                        I <- sum(X[[paste(error_name)]], na.rm = TRUE)
+                        print(h-I)
+                }       
+                X[[var1]] <- ifelse(X[[error_name]] == FALSE | is.na(X[[error_name]]), X[[var1]], 
+                                    ifelse(X[[error_name]] == TRUE, NA, X[[var1]]))
+                X <- get_errors(X)
+                if(print_results == TRUE) {
+                        print(paste("Total number of", paste(error_name, "s", sep =""), "deleted"))
+                        print(I)
+                }
                 return(X)
         }
         
-        #ED_UP_errors
-        correct_ED_UP_errors <- function (X) {
-                print("Total ED_UP_errors")
-                print(sum(X$ED_UP_error, na.rm = TRUE)) 
-                X$end_date_new <- ifelse((X$ED_UP_error == TRUE & !is.na(X$ED_UP_error)) &
-                                                 (X$ED_UP_error_ED_minus_day == FALSE &
-                                                          !is.na(X$ED_UP_error_ED_minus_day)) &
-                                                 (X$ED_DOB_error_ED_minus_day !=TRUE),
-                                         X$end_date_minus_day, X$end_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("ED_UP_errors after corrections by day")
-                print(sum(X$ED_UP_error, na.rm = TRUE))  
-                X$end_date_new <- ifelse((X$ED_UP_error == TRUE & !is.na(X$ED_UP_error)) &
-                                                 (X$ED_UP_error_ED_minus_week == FALSE &
-                                                          !is.na(X$ED_UP_error_ED_minus_week)) &
-                                                 (X$ED_DOB_error_ED_minus_week !=TRUE),
-                                         X$end_date_minus_week, X$end_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("ED_UP_errors after corrections by week")
-                print(sum(X$ED_UP_error, na.rm = TRUE))  
-                X$end_date_new <- ifelse((X$ED_UP_error == TRUE & !is.na(X$ED_UP_error)) &
-                                                 (X$ED_UP_error_ED_minus_month == FALSE &
-                                                          !is.na(X$ED_UP_error_ED_minus_month)) &
-                                                 (X$ED_DOB_error_ED_minus_month !=TRUE),
-                                         X$end_date_minus_month, X$end_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("ED_UP_errors after corrections by month")
-                print(sum(X$ED_UP_error, na.rm = TRUE)) 
-                X$end_date_new <- ifelse((X$ED_UP_error == TRUE & !is.na(X$ED_UP_error)) &
-                                                 (X$ED_UP_error_ED_minus_year == FALSE &
-                                                          !is.na(X$ED_UP_error_ED_minus_year)) &
-                                                 (X$ED_DOB_error_ED_minus_year !=TRUE),
-                                         X$end_date_minus_year, X$end_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("ED_UP_errors after corrections by year")
-                print(sum(X$ED_UP_error, na.rm = TRUE)) 
-                X$end_date_new <- ifelse(X$ED_UP_error == TRUE &
-                                                 !is.na(X$ED_UP_error), NA, X$end_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("ED_UP_errors after deletions")
-                print(sum(X$ED_UP_error, na.rm = TRUE))    
-                return(X)
-        }
+        dups8 <- correct_errors(dups8, n, "SD_UP_error", "start_date_new", print_results = TRUE)
+        dups8 <- correct_errors(dups8, n, "ED_UP_error", "end_date_new", print_results = TRUE)
+        dups8 <- correct_errors(dups8, n, "SD_LOW_error", "start_date_new", print_results = TRUE)
+        dups8 <- correct_errors(dups8, n, "ED_LOW_error", "end_date_new", print_results = TRUE)
+        dups8 <- correct_errors(dups8, n, "VD_LOW_error", "visit_date_new", print_results = TRUE)
+        dups8 <- correct_errors(dups8, n, "SD_LATE_error", "start_date_new", print_results = TRUE)
+        dups8 <- correct_errors(dups8, n, "ED_EARLY_error", "end_date_new", print_results = TRUE)
         
-        
-        #ED_DOB_errors
-        correct_ED_DOB_errors <- function (X) {
-                print("Total ED_DOB_errors")
-                print(sum(X$ED_DOB_error, na.rm = TRUE)) 
-                X$end_date_new <- ifelse((X$ED_DOB_error == TRUE & !is.na(X$ED_DOB_error)) & 
-                                                 (X$ED_DOB_error_ED_plus_day == FALSE &
-                                                          !is.na(X$ED_DOB_error_ED_plus_day)) &
-                                                 (X$ED_UP_error_ED_plus_day !=TRUE),
-                                         X$end_date_plus_day, X$end_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("ED_DOB_errors after corrections by day")
-                print(sum(X$ED_DOB_error, na.rm = TRUE))  
-                X$end_date_new <- ifelse((X$ED_DOB_error == TRUE & !is.na(X$ED_DOB_error)) & 
-                                                 (X$ED_DOB_error_ED_plus_week == FALSE &
-                                                          !is.na(X$ED_DOB_error_ED_plus_week)) &
-                                                 (X$ED_UP_error_ED_plus_week !=TRUE),
-                                         X$end_date_plus_week, X$end_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("ED_DOB_errors after corrections by week")
-                print(sum(X$ED_DOB_error, na.rm = TRUE))  
-                X$end_date_new <- ifelse((X$ED_DOB_error == TRUE & !is.na(X$ED_DOB_error)) & 
-                                                 (X$ED_DOB_error_ED_plus_month == FALSE &
-                                                          !is.na(X$ED_DOB_error_ED_plus_month)) &
-                                                 (X$ED_UP_error_ED_plus_month !=TRUE),
-                                         X$end_date_plus_month, X$end_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("ED_DOB_errors after corrections by month")
-                print(sum(X$ED_DOB_error, na.rm = TRUE)) 
-                X$end_date_new <- ifelse((X$ED_DOB_error == TRUE & !is.na(X$ED_DOB_error)) & 
-                                                 (X$ED_DOB_error_ED_plus_year == FALSE &
-                                                          !is.na(X$ED_DOB_error_ED_plus_year)) &
-                                                 (X$ED_UP_error_ED_plus_year !=TRUE),
-                                         X$end_date_plus_year, X$end_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("ED_DOB_errors after corrections by year")
-                print(sum(X$ED_DOB_error, na.rm = TRUE))     
-                #delete errors that can't be corrected
-                X$end_date_new <- ifelse(X$ED_DOB_error == TRUE &
-                                                 !is.na(X$ED_DOB_error), NA, X$end_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("ED_DOB_errors after deletions")
-                print(sum(X$ED_DOB_error, na.rm = TRUE))    
-                return(X)
-        }
-        
-        #VD_DOB_errors
-        correct_VD_DOB_errors <- function (X) {
-                print("Total VD_DOB_errors")
-                print(sum(X$VD_DOB_error, na.rm = TRUE)) 
-                X$visit_date_new <- ifelse((X$VD_DOB_error == TRUE & !is.na(X$VD_DOB_error)) & 
-                                                   (X$VD_DOB_error_VD_plus_day == FALSE &
-                                                            !is.na(X$VD_DOB_error_VD_plus_day)),
-                                           X$visit_date_plus_day, X$visit_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("VD_DOB_errors after corrections by day")
-                print(sum(X$VD_DOB_error, na.rm = TRUE))  
-                X$visit_date_new <- ifelse((X$VD_DOB_error == TRUE & !is.na(X$VD_DOB_error)) & 
-                                                   (X$VD_DOB_error_VD_plus_week == FALSE &
-                                                            !is.na(X$VD_DOB_error_VD_plus_week)),
-                                           X$visit_date_plus_week, X$visit_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("VD_DOB_errors after corrections by week")
-                print(sum(X$VD_DOB_error, na.rm = TRUE))  
-                X$visit_date_new <- ifelse((X$VD_DOB_error == TRUE & !is.na(X$VD_DOB_error)) & 
-                                                   (X$VD_DOB_error_VD_plus_month == FALSE &
-                                                            !is.na(X$VD_DOB_error_VD_plus_month)),
-                                           X$visit_date_plus_month, X$visit_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("VD_DOB_errors after corrections by month")
-                print(sum(X$VD_DOB_error, na.rm = TRUE)) 
-                
-                X$visit_date_new <- ifelse((X$VD_DOB_error == TRUE & !is.na(X$VD_DOB_error)) & 
-                                                   (X$VD_DOB_error_VD_plus_year == FALSE &
-                                                            !is.na(X$VD_DOB_error_VD_plus_year)),
-                                           X$visit_date_plus_year, X$visit_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("VD_DOB_errors after corrections by year")
-                print(sum(X$VD_DOB_error, na.rm = TRUE))     
-                
-                #delete errors that can't be corrected
-                X$visit_date_new <- ifelse(X$VD_DOB_error == TRUE &
-                                                   !is.na(X$VD_DOB_error), NA, X$visit_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("VD_DOB_errors after deletions")
-                print(sum(X$VD_DOB_error, na.rm = TRUE))    
-                return(X)
-        }
-        
-        #SD_VD_errors
-        correct_SD_VD_errors <- function (X) {
-                print("Total SD_VD_errors")
-                print(sum(X$SD_VD_error, na.rm = TRUE)) 
-                X$start_date_new <- ifelse((X$SD_VD_error == TRUE & !is.na(X$SD_VD_error)) & 
-                                                   (X$SD_VD_error_SD_minus_day == FALSE &
-                                                            !is.na(X$SD_VD_error_SD_minus_day)) &
-                                                   (X$SD_UP_error_SD_minus_day !=TRUE) &
-                                                   (X$SD_DOB_error_SD_minus_day !=TRUE),
-                                           X$start_date_minus_day, X$start_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("SD_VD_errors after corrections by day")
-                print(sum(X$SD_VD_error, na.rm = TRUE))  
-                X$start_date_new <- ifelse((X$SD_VD_error == TRUE & !is.na(X$SD_VD_error)) & 
-                                                   (X$SD_VD_error_SD_minus_week == FALSE &
-                                                            !is.na(X$SD_VD_error_SD_minus_week)) &
-                                                   (X$SD_UP_error_SD_minus_week !=TRUE) &
-                                                   (X$SD_DOB_error_SD_minus_week !=TRUE),
-                                           X$start_date_minus_week, X$start_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("SD_VD_errors after corrections by week")
-                print(sum(X$SD_VD_error, na.rm = TRUE))  
-                X$start_date_new <- ifelse((X$SD_VD_error == TRUE & !is.na(X$SD_VD_error)) & 
-                                                   (X$SD_VD_error_SD_minus_month == FALSE &
-                                                            !is.na(X$SD_VD_error_SD_minus_month)) &
-                                                   (X$SD_UP_error_SD_minus_month !=TRUE) &
-                                                   (X$SD_DOB_error_SD_minus_month !=TRUE),
-                                           X$start_date_minus_month, X$start_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("SD_VD_errors after corrections by month")
-                print(sum(X$SD_VD_error, na.rm = TRUE)) 
-                X$start_date_new <- ifelse((X$SD_VD_error == TRUE & !is.na(X$SD_VD_error)) & 
-                                                   (X$SD_VD_error_SD_minus_year == FALSE &
-                                                            !is.na(X$SD_VD_error_SD_minus_year)) &
-                                                   (X$SD_UP_error_SD_minus_year !=TRUE) &
-                                                   (X$SD_DOB_error_SD_minus_year !=TRUE),
-                                           X$start_date_minus_year, X$start_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("SD_VD_errors after corrections by year")
-                print(sum(X$SD_VD_error, na.rm = TRUE))     
-                X$start_date_new <- ifelse(X$SD_VD_error == TRUE &
-                                                   !is.na(X$SD_VD_error), NA, X$start_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("SD_VD_errors after deletions")
-                print(sum(X$SD_VD_error, na.rm = TRUE))    
-                return(X)
-        }
-        
-        #ED_VD_errors
-        correct_ED_VD_errors <- function (X) {
-                print("Total ED_VD_errors")
-                print(sum(X$ED_VD_error, na.rm = TRUE)) 
-                X$end_date_new <- ifelse((X$ED_VD_error == TRUE & !is.na(X$ED_VD_error)) &  
-                                                 (X$ED_VD_error_ED_plus_day = FALSE &
-                                                          !is.na(X$ED_VD_error_ED_plus_day)) &
-                                                 (X$ED_UP_error_ED_plus_day !=TRUE) &
-                                                 (X$ED_DOB_error_ED_plus_day !=TRUE),
-                                         X$end_date_plus_day, X$end_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("ED_VD_errors after corrections by day")
-                print(sum(X$ED_VD_error, na.rm = TRUE))  
-                X$end_date_new <- ifelse((X$ED_VD_error == TRUE & !is.na(X$ED_VD_error)) & 
-                                                 (X$ED_VD_error_ED_plus_week = FALSE &
-                                                          !is.na(X$ED_VD_error_ED_plus_week)) &
-                                                 (X$ED_UP_error_ED_plus_week !=TRUE) &
-                                                 (X$ED_DOB_error_ED_plus_week !=TRUE),
-                                         X$end_date_plus_week, X$end_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("ED_VD_errors after corrections by week")
-                print(sum(X$ED_VD_error, na.rm = TRUE))  
-                X$end_date_new <- ifelse((X$ED_VD_error == TRUE & !is.na(X$ED_VD_error)) & 
-                                                 (X$ED_VD_error_ED_plus_month = FALSE &
-                                                          !is.na(X$ED_UP_error_ED_plus_month)) &
-                                                 (X$ED_UP_error_ED_plus_month !=TRUE) &
-                                                 (X$ED_DOB_error_ED_plus_month !=TRUE),
-                                         X$end_date_plus_month, X$end_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("ED_VD_errors after corrections by month")
-                print(sum(X$ED_VD_error, na.rm = TRUE)) 
-                X$end_date_new <- ifelse((X$ED_VD_error == TRUE & !is.na(X$ED_VD_error)) & 
-                                                 (X$ED_UP_error_ED_plus_year = FALSE &
-                                                          !is.na(X$ED_UP_error_ED_plus_year)) &
-                                                 (X$ED_UP_error_ED_plus_year !=TRUE) &
-                                                 (X$ED_DOB_error_ED_plus_year !=TRUE),
-                                         X$end_date_plus_year, X$end_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("ED_VD_errors after corrections by year")
-                print(sum(X$ED_VD_error, na.rm = TRUE))     
-                X$end_date_new <- ifelse(X$ED_VD_error == TRUE & !is.na(X$ED_VD_error), NA, X$end_date_new)
-                X <- get_errors(X, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-                X <- get_alternative_dates_errors(X)
-                print("ED_VD_errors after deletions")
-                print(sum(X$ED_VD_error, na.rm = TRUE))    
-                return(X)
-        }
-
-        dups8 <- correct_SD_UP_errors(dups8)
-        dups8 <- correct_SD_DOB_errors(dups8)
-        dups8 <- correct_ED_UP_errors(dups8)
-        dups8 <- correct_ED_DOB_errors(dups8)
-        dups8 <- correct_VD_DOB_errors(dups8)
-        dups8 <- correct_SD_VD_errors(dups8)
-        dups8 <- correct_ED_VD_errors(dups8)
-        
-        dups8 <- subset(dups8, select = 1:(which("start_date_plus_day" == colnames(dups8))-1))
+        dups8 <- subset(dups8, select = 1:(which("start_date_new_plus_day" == colnames(dups8))-1))
 
 #Transform the date columns that have been edited back to human-readable format
         dups8$end_date_new <- as.Date(dups8$end_date_new, origin="1970-01-01")
@@ -702,10 +459,7 @@
 
 #recreate duplicate columns to identify changes in the duplications
         dups8 <- get_duplications(dups8)
-        sum(dups8$duplications) #603 duplications
-        sum(dups8$complete_duplications) #246 complete duplications have appeared 
-        #now because of added missing data
-
+        
         dups8 <- dups8 %>%
                 dplyr::group_by(complete_dups_ID) %>%
                 dplyr::do(get_complete_dup_info(.)) %>%
@@ -713,13 +467,10 @@
         
         dups9 <- subset(dups8, (dups8$complete_duplications == FALSE) |
                                 (dups8$complete_duplications == TRUE & dups8$last_observation_comp == TRUE))
-        length(dups8$ID) - length(dups9$ID) #This removes 157 data entries 
+        length(dups8$ID) - length(dups9$ID) #This removes 137 data entries 
 
 #recreate duplicate columns to identify changes in the duplications
         dups9 <- get_duplications(dups9)
-        sum(dups9$duplications) #370 duplications
-        sum(dups9$complete_duplications) #0 complete duplications 
-
 
 #STEP 5 – WHEN THERE ARE DUPLICATIONS THAT ARE NOT ERRORS/MISSING KEEP THE MOST RECENT DATA ENTRY
 
@@ -738,13 +489,10 @@
                 dplyr::ungroup()
         
         replace_duplicate_data <- function(X, n) {
-                #replace duplicate data in the start dates
                 X$start_date_new <- ifelse(X$any_duplications == TRUE,
                                            X$most_recent_start_date, X$start_date_new)
-                #replace duplicate data in the end dates
                 X$end_date_new <- ifelse(X$any_duplications == TRUE,
                                          X$most_recent_end_date, X$end_date_new)
-                #replace duplicate data in the visited vet dates
                 X$visit_date_new <- ifelse(X$any_duplications == TRUE,
                                            X$most_recent_visit_date, X$visit_date_new)
                 return(X)
@@ -753,13 +501,10 @@
         dups9 <- replace_duplicate_data(dups8)
         dups9$end_date_new <- as.Date(dups9$end_date_new, origin="1970-01-01")
         dups9$start_date_new <- as.Date(dups9$start_date_new, origin="1970-01-01")
-        dups9$visited_vet_date_new <- as.Date(dups9$visited_vet_date_new, origin="1970-01-01")
+        dups9$visit_date_new <- as.Date(dups9$visit_date_new, origin="1970-01-01")
 
 #recreate duplicate columns to identify changes in the duplications
         dups9 <- get_duplications(dups9)
-        sum(dups9$duplications) #603 duplications
-        sum(dups9$complete_duplications) #603 complete duplications have appeared 
-        #now because of added missing data
 
         dups9 <- dups9 %>%
                 dplyr::group_by(complete_dups_ID) %>%
@@ -768,46 +513,60 @@
         
         dups10 <- subset(dups9, (dups9$complete_duplications == FALSE) |
                                  (dups9$complete_duplications == TRUE & dups9$last_observation_comp == TRUE))
-        length(dups9$ID) - length(dups10$ID) #This removes 358 data entries 
+        length(dups9$ID) - length(dups10$ID) #This removes 356 data entries 
 
 #recreate duplicate columns to identify changes in the duplications
         dups10 <- get_duplications(dups10)
-        sum(dups10$duplications) #0 duplications
-        sum(dups10$complete_duplications) #0 complete duplications 
+
+#remove unnecessary columns        
+        dups10 <- subset(dups10, select = 1:(which("duplications" == colnames(dups10))-1))
 
 #THIS IS THE FULLY CLEANED DUPLICATE DATA!
 
 #STEP 7 OF CLEANING – CORRECT OR DELETE ANY ERRORS IN THE DATA THAT IS NOT DUPLICATED          
 
-        not_dups2 <- get_alternative_dates(not_dups)
-        not_dups2 <- get_errors(not_dups2, a = "start_date_new", b = "end_date_new", c = "visit_date_new", d = "")
-        not_dups2 <- get_alternative_dates_errors(not_dups2)
-        not_dups2 <- correct_SD_UP_errors(not_dups2)
-        not_dups2 <- correct_SD_DOB_errors(not_dups2)
-        not_dups2 <- correct_ED_UP_errors(not_dups2)
-        not_dups2 <- correct_ED_DOB_errors(not_dups2)
-        not_dups2 <- correct_VD_DOB_errors(not_dups2)
-        not_dups2 <- correct_SD_VD_errors(not_dups2)
-        not_dups2 <- correct_ED_VD_errors(not_dups2)
-        
-        not_dups2 <- subset(not_dups2, select = 1:(which("start_date_plus_day" == colnames(not_dups2))-1))
+       not_dups2 <- get_alternative_dates(not_dups, "start_date_new")
+       not_dups2 <- get_alternative_dates(not_dups2, "end_date_new")
+       not_dups2 <- get_alternative_dates(not_dups2, "visit_date_new")
+       
+       not_dups2 <- get_errors(not_dups2)
+       not_dups2 <- get_alternative_dates_errors(not_dups2, n, time_diff = "plus_day")
+       not_dups2 <- get_alternative_dates_errors(not_dups2, n, time_diff = "plus_week")
+       not_dups2 <- get_alternative_dates_errors(not_dups2, n, time_diff = "plus_month")
+       not_dups2 <- get_alternative_dates_errors(not_dups2, n, time_diff = "plus_year")
+       not_dups2 <- get_alternative_dates_errors(not_dups2, n, time_diff = "minus_day")
+       not_dups2 <- get_alternative_dates_errors(not_dups2, n, time_diff = "minus_week")
+       not_dups2 <- get_alternative_dates_errors(not_dups2, n, time_diff = "minus_month")
+       not_dups2 <- get_alternative_dates_errors(not_dups2, n, time_diff = "minus_year")
+       
+       not_dups2 <- correct_errors(not_dups2, n, "SD_UP_error", "start_date_new", print_results = TRUE)
+       not_dups2 <- correct_errors(not_dups2, n, "ED_UP_error", "end_date_new", print_results = TRUE)
+       not_dups2 <- correct_errors(not_dups2, n, "SD_LOW_error", "start_date_new", print_results = TRUE)
+       not_dups2 <- correct_errors(not_dups2, n, "ED_LOW_error", "end_date_new", print_results = TRUE)
+       not_dups2 <- correct_errors(not_dups2, n, "VD_LOW_error", "visit_date_new", print_results = TRUE)
+       not_dups2 <- correct_errors(not_dups2, n, "SD_LATE_error", "start_date_new", print_results = TRUE)
+       not_dups2 <- correct_errors(not_dups2, n, "ED_EARLY_error", "end_date_new", print_results = TRUE)
+       
+       not_dups2 <- subset(not_dups2, select = 1:(which("duplications" == colnames(not_dups2))-1))
 
 #Transform the date columns that have been edited back to human-readable format
         not_dups2$end_date_new <- as.Date(not_dups2$end_date_new, origin="1970-01-01")
         not_dups2$start_date_new <- as.Date(not_dups2$start_date_new, origin="1970-01-01")
         not_dups2$visit_date_new <- as.Date(not_dups2$visit_date_new, origin="1970-01-01")
-#START DATES
-        sum(is.na(not_dups$start_date_new)) #913
-        sum(is.na(not_dups2$start_date_new)) #1439
-#END DATES
-        sum(is.na(not_dups$end_date_new)) #927
-        sum(is.na(not_dups2$end_date_new)) #1551
-#VISITED VET DATES
-        sum(is.na(not_dups$visit_date_new)) #884
-        sum(is.na(not_dups2$visit_date_new)) #1207   
 
+#THIS IS THE FULLY CLEANED NOT - DUPLICATE DATA!
 
+#REJOIN THE SUBSETS AND SUMMARISE CLEANING PROCESS     
 
-
-
+        dat2 <- rbind(not_dups2, dups10)
+        
+        #SUMMARY
+        sum(length(dat2$ID)) - sum(length(dat$ID)) #1418 duplicated rows deleted
+        sum(is.na(dat2$start_date)) - sum(is.na(dat2$start_date_new)) #504 start dates deleted
+        sum(dat2$start_date != dat2$start_date_new, na.rm = TRUE) #143 start dates modified
+        sum(is.na(dat2$end_date)) - sum(is.na(dat2$end_date_new)) #502 end dates deleted
+        sum(dat2$end_date != dat2$end_date_new, na.rm = TRUE) #121 end dates modified
+        sum(is.na(dat2$visit_date)) - sum(is.na(dat2$visit_date_new)) #212 visit dates deleted
+        sum(dat2$visit_date != dat2$visit_date_new, na.rm = TRUE) #78 visit dates modified
+        
 
