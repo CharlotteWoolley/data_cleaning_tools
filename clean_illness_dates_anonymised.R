@@ -51,25 +51,26 @@
 
 #STEP 1 OF CLEANING – REMOVE THE COMPLETE DUPLICATIONS  
 
-#get_complete_dup_info finds the last complete duplicate in the data 
-#(i.e the most recently entered entry)
-        get_complete_dup_info <- function(X){
-                observation_comp <- 1:nrow(X) 
-                last_obs_num_comp <- tail(observation_comp, 1)
-                X$last_observation_comp <- last_obs_num_comp == observation_comp
+#get_dup_info finds the last duplicate in the data (i.e the most recently entered 
+#entry)
+        get_dup_info <- function(X){
+                X <- X[order(X$ID), ]
+                observation <- 1:nrow(X) 
+                X$last_obs_num <- tail(observation, 1)
+                X$last_observation <- X$last_obs_num == observation
                 return(X)
         }
 #Apply this function to each group of complete duplicates
         dups <- dups %>%
                 dplyr::group_by(complete_dups_ID) %>%
-                dplyr::do(get_complete_dup_info(.)) %>%
+                dplyr::do(get_dup_info(.)) %>%
                 dplyr::ungroup()
 
 #Make a new dataset that contains only the most recent entry from complete 
 #duplicates and deletes all older complete duplicates        
         dups2 <- subset(dups, (dups$complete_duplications == FALSE) |
                                 (dups$complete_duplications == TRUE & 
-                                         dups$last_observation_comp == TRUE))
+                                         dups$last_observation == TRUE))
         length(dups$ID) - length(dups2$ID) #This removes 435 data entries 
 
 #recreate duplicate columns to identify changes in the duplications
@@ -77,15 +78,6 @@
         
 #STEP 2 OF CLEANING – REPLACE MISSING DATA WITH DATA IN OTHER DUPLICATE ROWS 
 
-#get_dup_info finds the last duplicate in the data (i.e the most recently 
-#entered entry) and also finds the number of entries in each group of duplicates
-        get_dup_info <- function(X){
-                observation <- 1:nrow(X)
-                X$last_obs_num <- tail(observation, 1)
-                X$last_observation <- X$last_obs_num == observation
-                return(X)
-        }
-#Apply this function to each group of duplicates
         dups3 <- dups2 %>%
                 dplyr::group_by(ID) %>%
                 dplyr::do(get_dup_info(.)) %>%
@@ -178,17 +170,17 @@
 #recreate duplicate columns to identify changes in the duplications
         dups4 <- get_duplications(dups4)
         
-#reapply get_complete_dup_info to find the last complete duplicates in the data 
+#reapply get_dup_info to find the last complete duplicates in the data  
         dups4 <- dups4 %>%
                 dplyr::group_by(complete_dups_ID) %>%
-                dplyr::do(get_complete_dup_info(.)) %>%
+                dplyr::do(get_dup_info(.)) %>%
                 dplyr::ungroup()
         
 #Make a new dataset that contains only the most recent entry from complete 
 #duplicates and deletes all older complete duplicates        
         dups5 <- subset(dups4, (dups4$complete_duplications == FALSE) |
                                 (dups4$complete_duplications == TRUE & 
-                                         dups4$last_observation_comp == TRUE))
+                                         dups4$last_observation == TRUE))
         length(dups4$ID) - length(dups5$ID) #This removes 385 data entries 
 
 #recreate duplicate columns to identify changes in the duplications
@@ -340,18 +332,18 @@
 #recreate duplicate columns to identify changes in the duplications
         dups6 <- get_duplications(dups6)
         
-#reapply get_complete_dup_info to find the last complete duplicates in the data        
+#reapply get_dup_info to find the last complete duplicates in the data        
         dups6 <- dups6 %>%
                 dplyr::group_by(complete_dups_ID) %>%
-                dplyr::do(get_complete_dup_info(.)) %>%
+                dplyr::do(get_dup_info(.)) %>%
                 dplyr::ungroup()
         
 #Make a new dataset that contains only the most recent entry from complete 
 #duplicates and deletes all older complete duplicates   
         dups7 <- subset(dups6, (dups6$complete_duplications == FALSE) |
                                 (dups6$complete_duplications == TRUE & 
-                                         dups6$last_observation_comp == TRUE))
-        length(dups6$ID) - length(dups7$ID) #This removes 242 data entries 
+                                         dups6$last_observation == TRUE))
+        length(dups6$ID) - length(dups7$ID) #This removes 264 data entries 
 
 #recreate duplicate columns to identify changes in the duplications
         dups7 <- get_duplications(dups7)
@@ -601,17 +593,17 @@
 
 #recreate duplicate columns to identify changes in the duplications
         dups8 <- get_duplications(dups8)
-#reapply get_complete_dup_info to find the last complete duplicates in the data       
+#reapply get_dup_info to find the last complete duplicates in the data        
         dups8 <- dups8 %>%
                 dplyr::group_by(complete_dups_ID) %>%
-                dplyr::do(get_complete_dup_info(.)) %>%
+                dplyr::do(get_dup_info(.)) %>%
                 dplyr::ungroup()
 #Make a new dataset that contains only the most recent entry from complete 
 #duplicates and deletes all older complete duplicates           
         dups9 <- subset(dups8, (dups8$complete_duplications == FALSE) |
                                 (dups8$complete_duplications == TRUE &
-                                         dups8$last_observation_comp == TRUE))
-        length(dups8$ID) - length(dups9$ID) #This removes 137 data entries 
+                                         dups8$last_observation == TRUE))
+        length(dups8$ID) - length(dups9$ID) #This removes 130 data entries 
 
 #recreate duplicate columns to identify changes in the duplications
         dups9 <- get_duplications(dups9)
@@ -652,18 +644,18 @@
 #recreate duplicate columns to identify changes in the duplications
         dups9 <- get_duplications(dups9)
 
-#reapply get_complete_dup_info to find the last complete duplicates in the data
+#reapply get_dup_info to find the last complete duplicates in the data  
         dups9 <- dups9 %>%
                 dplyr::group_by(complete_dups_ID) %>%
-                dplyr::do(get_complete_dup_info(.)) %>%
+                dplyr::do(get_dup_info(.)) %>%
                 dplyr::ungroup()
         
 #Make a new dataset that contains only the most recent entry from complete 
 #duplicates and deletes all older complete duplicates          
         dups10 <- subset(dups9, (dups9$complete_duplications == FALSE) |
                                  (dups9$complete_duplications == TRUE & 
-                                          dups9$last_observation_comp == TRUE))
-        length(dups9$ID) - length(dups10$ID) #This removes 356 data entries 
+                                          dups9$last_observation == TRUE))
+        length(dups9$ID) - length(dups10$ID) #This removes 334 data entries 
 
 #recreate duplicate columns to identify changes in the duplications
         dups10 <- get_duplications(dups10)
@@ -717,10 +709,10 @@
         #SUMMARY
         sum(length(dat2$ID)) - sum(length(dat$ID)) #1418 duplicated rows deleted
         sum(is.na(dat2$start_date)) - sum(is.na(dat2$start_date_new)) #504 start dates deleted
-        sum(dat2$start_date != dat2$start_date_new, na.rm = TRUE) #143 start dates modified
-        sum(is.na(dat2$end_date)) - sum(is.na(dat2$end_date_new)) #502 end dates deleted
-        sum(dat2$end_date != dat2$end_date_new, na.rm = TRUE) #121 end dates modified
-        sum(is.na(dat2$visit_date)) - sum(is.na(dat2$visit_date_new)) #212 visit dates deleted
-        sum(dat2$visit_date != dat2$visit_date_new, na.rm = TRUE) #78 visit dates modified
+        sum(dat2$start_date != dat2$start_date_new, na.rm = TRUE) #125 start dates modified
+        sum(is.na(dat2$end_date)) - sum(is.na(dat2$end_date_new)) #507 end dates deleted
+        sum(dat2$end_date != dat2$end_date_new, na.rm = TRUE) #111 end dates modified
+        sum(is.na(dat2$visit_date)) - sum(is.na(dat2$visit_date_new)) #213 visit dates deleted
+        sum(dat2$visit_date != dat2$visit_date_new, na.rm = TRUE) #83 visit dates modified
         
 
